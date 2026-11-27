@@ -10,7 +10,34 @@
   * `fixed1`, `fixed2`, `fixed4` : scaling manuel (`B1`, 128 Mo RAM, 600 MHz, respectivement $N = 1, 2, 4$ instances fixes) pour les Parties 1 et 2.
   * `fixed1-opt` : version isolée (`--no-promote`, 1 instance `B1`) intégrant le découpage par lots de 30 auteurs dans `get_timeline` pour la Partie 3.
 * **Dates et environnement de mesure** : mesures exécutées du 24 au 27 novembre 2026 avec Locust (`bench/locustfile.py`, boucle fermée `wait_time = constant(0)`, un utilisateur TinyInsta distinct par utilisateur Locust) depuis **Google Cloud Shell** (`Python 3.12`, Linux).
-* **Reproductibilité** : toutes les figures (`figures/fig1a.png` à `fig3.png`) et données agrégées (`figures/fig1a.csv` à `fig3.csv`) sont régénérées en une commande depuis les journaux bruts (`raw/`) via `python3 bench/make_figures.py`.
+* **Reproductibilité — Comment refaire toutes les expériences depuis zéro** :
+  1. **Installation des dépendances et configuration GCP** :
+     ```bash
+     pip install -r bench/requirements.txt matplotlib
+     gcloud config set project projetmassivedata-511513
+     gcloud app deploy app.yaml --quiet
+     gcloud datastore indexes create index.yaml --quiet
+     ```
+  2. **Peuplement des jeux de données Datastore** (`bench/seed_exact.py`, avec `--purge` au préalable si un préfixe existe déjà) :
+     ```bash
+     python3 bench/seed_exact.py --prefix base   --users 1000  --posts-per-user 20 --followees 20
+     python3 bench/seed_exact.py --prefix u100   --users 100   --posts-per-user 20 --followees 20
+     python3 bench/seed_exact.py --prefix u10000 --users 10000 --posts-per-user 20 --followees 20
+     for p in 10 100 1000; do
+       python3 bench/seed_exact.py --prefix p$p --users 100 --posts-per-user$p --followees 20
+     done
+     for f in $(seq 5 5 100); do
+       python3 bench/seed_exact.py --prefix $(printf 'f%02d' $f) --users 120 --posts-per-user 20 --followees$f
+     done
+     ```
+  3. **Exécution des campagnes de mesure (Locust)** :
+     * *Partie 1* : déployer `fixed1` (`./deploy_fixed.sh 1`), exécuter `locust -f bench/locustfile.py --headless -u 1 -r 1 -t 20s --host <URL_FIXED1>` sur chaque préfixe (`u*`, `p*`, `f05..f100`), puis arrêter `fixed1` (`gcloud app versions stop fixed1`).
+     * *Partie 2* : lancer `python3 bench/run_p2.py --duration 30s` (déploie, mesure $C \in \{1,2,4,8,16,32,64\}$ sur `base` et arrête automatiquement `fixed1`, `fixed2`, `fixed4`).
+     * *Partie 3* : lancer `python3 bench/run_p3.py --duration 30s` (déploie la version optimisée `fixed1-opt` avec `--no-promote`, re-mesure `f05..f100` à `-u 1` et arrête `fixed1-opt`).
+  4. **Régénération en une seule commande de tous les CSV et graphiques (`figures/fig*.csv` et `figures/fig*.png`)** :
+     ```bash
+     python3 bench/make_figures.py
+     ```
 
 ---
 
