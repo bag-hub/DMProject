@@ -78,7 +78,7 @@ def summarize_csv(path: str, trim_warmup_s: float = 2.0):
 def write_csv(filename: str, fieldnames: list, data: list):
     out_path = os.path.join(FIG_DIR, filename)
     with open(out_path, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
         w.writeheader()
         w.writerows(data)
     print(f"[CSV] {out_path}")

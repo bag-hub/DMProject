@@ -46,31 +46,15 @@ def get_timeline(user: str, limit: int = 20):
         follows = user_entity.get('follows', [])
     follows = list({*follows, user})
 
-    timeline = []
-    used_gql = False
-    try:
-        if hasattr(client, 'gql'):
-            gql = client.gql("SELECT * FROM Post WHERE author IN @authors ORDER BY created DESC")
-            gql.bindings["authors"] = follows
-            timeline = list(gql.fetch(limit=limit))
-            used_gql = True
-    except Exception:
-        pass
-    if not used_gql:
-        try:
-            query = client.query(kind='Post')
-            query.add_filter('author', 'IN', follows)
-            query.order = ['-created']
-            timeline = list(query.fetch(limit=limit))
-        except Exception:
-            posts = []
-            for author in follows:
-                q = client.query(kind='Post')
-                q.add_filter('author', '=', author)
-                q.order = ['-created']
-                posts.extend(list(q.fetch(limit=limit)))
-            timeline = sorted(posts, key=lambda p: p.get('created'), reverse=True)[:limit]
-    return timeline
+    # Optimisation Partie 3 : découpage par lots de 30 (plafond du filtre IN de Datastore)
+    posts = []
+    for i in range(0, len(follows), 30):
+        chunk = follows[i:i + 30]
+        query = client.query(kind='Post')
+        query.add_filter('author', 'IN', chunk)
+        query.order = ['-created']
+        posts.extend(list(query.fetch(limit=limit)))
+    return sorted(posts, key=lambda p: p.get('created'), reverse=True)[:limit]
 
 
 def seed_data(users: int = 5, posts: int = 30, follows_min: int = 1, follows_max: int = 3, prefix: str = 'user'):
